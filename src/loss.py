@@ -1,81 +1,75 @@
-import tensorflow as tf
-from typing import Any
+import torch
 
 
-def logloss(Ptrue, Pred, szs, eps=10e-10):
-	# batch size, height, width and channels
-	b,h,w,ch = szs
-	Pred = tf.clip_by_value(Pred, eps, 1.0 - eps)
-	Pred = -tf.math.log(Pred)
-	Pred = Pred*Ptrue
-	Pred = tf.reshape(Pred, (b, h*w*ch))
-	Pred = tf.reduce_sum(Pred,1)
-	return Pred
+def logloss(Ptrue, Pred, szs, eps=1e-10):
+    b, h, w, ch = szs
+    Pred = torch.clamp(Pred, eps, 1.0 - eps)
+    Pred = -torch.log(Pred)
+    Pred = Pred * Ptrue
+    Pred = Pred.view(b, h * w * ch)
+    Pred = torch.sum(Pred, 1)
+    return Pred
+
 
 def l1(true, pred, szs):
-	b,h,w,ch = szs
-	res = tf.reshape(true-pred, (b,h*w*ch))
-	res = tf.abs(res)
-	res = tf.reduce_sum(res,1)
-	return res
+    b, h, w, ch = szs
+    # res = (true - pred).view(b, h * w * ch)
+    res = (true - pred).reshape(b, h * w * ch)
+    res = torch.abs(res)
+    res = torch.sum(res, 1)
+    return res
 
-def clas_loss(Ytrue, Ypred): # classification loss only
 
-	wtrue = 0.5  # type: Any
-	wfalse = 0.5
-	b = tf.shape(Ytrue)[0]
-	h = tf.shape(Ytrue)[1]
-	w = tf.shape(Ytrue)[2]
+def clas_loss(Ytrue, Ypred):
+    wtrue = 0.5
+    wfalse = 0.5
+    b, h, w = Ytrue.size(0), Ytrue.size(2), Ytrue.size(3)
 
-	obj_probs_true = Ytrue[...,0]
-	obj_probs_pred = Ypred[...,0]
+    obj_probs_true = Ytrue[:, 0, ...]
+    obj_probs_pred = Ypred[:, 0, ...]
 
-	non_obj_probs_true = 1. - Ytrue[...,0]
-	non_obj_probs_pred = 1 - Ypred[...,0]
+    non_obj_probs_true = 1 - obj_probs_true
+    non_obj_probs_pred = 1 - obj_probs_pred
 
-	res  = wtrue*logloss(obj_probs_true,obj_probs_pred,(b,h,w,1))
-	res  += wfalse*logloss(non_obj_probs_true,non_obj_probs_pred,(b,h,w,1))
-	return res
-
+    res = wtrue * logloss(obj_probs_true, obj_probs_pred, (b, h, w, 1))
+    res += wfalse * logloss(non_obj_probs_true, non_obj_probs_pred, (b, h, w, 1))
+    return res
 
 
 def loc_loss(Ytrue, Ypred):
+    b, h, w = Ytrue.size(0), Ytrue.size(2), Ytrue.size(3)
 
-	b = tf.shape(Ytrue)[0]
-	h = tf.shape(Ytrue)[1]
-	w = tf.shape(Ytrue)[2]
+    # device = 'cpu'
 
-	obj_probs_true = Ytrue[...,0]
-	affine_pred	= Ypred[...,1:]
-	pts_true 	= Ytrue[...,1:]
+    obj_probs_true = Ytrue[:, 0, ...]
+    affine_pred = Ypred[:, 1:, ...]
+    pts_true = Ytrue[:, 1:, ...]
 
-	affinex = tf.stack([tf.maximum(affine_pred[...,0],0.),affine_pred[...,1],affine_pred[...,2]],3)
-	affiney = tf.stack([affine_pred[...,3],tf.maximum(affine_pred[...,4],0.),affine_pred[...,5]],3)
+    affinex = torch.stack([torch.clamp(affine_pred[:, 0, ...], min=0.), affine_pred[:, 1, ...], affine_pred[:, 2, ...]], 1)
+    affiney = torch.stack([affine_pred[:, 3, ...], torch.clamp(affine_pred[:, 4, ...], min=0.), affine_pred[:, 5, ...]], 1)
 
-	v = 0.5
-	base = tf.stack([[[[-v,-v,1., v,-v,1., v,v,1., -v,v,1.]]]])
-	base = tf.tile(base,tf.stack([b,h,w,1]))
+    v = 0.5
+    base = torch.tensor([-v, -v, 1., v, -v, 1., v, v, 1., -v, v, 1.])
+    base = base.repeat(b, h, w, 1)
+    # base = base.reshape(b, -1, h, w)
+    base = base.permute(0, 3, 1, 2)
 
-	pts = tf.zeros((b,h,w,0))
+    pts = torch.zeros((b, 0, h, w))
 
-	for i in range(0, 12, 3):
-		row = base[...,i:(i+3)]
-		ptsx = tf.reduce_sum(affinex*row,3)
-		ptsy = tf.reduce_sum(affiney*row,3)
+    for i in range(0, 12, 3):
+        row = base[:, i:(i + 3), ...]
+        ptsx = torch.sum(affinex * row, 1)
+        ptsy = torch.sum(affiney * row, 1)
 
-		pts_xy = tf.stack([ptsx,ptsy],3)
-		pts = (tf.concat([pts,pts_xy],3))
+        pts_xy = torch.stack([ptsx, ptsy], 1)
+        pts = torch.cat([pts, pts_xy], 1)
 
-	flags = tf.reshape(obj_probs_true, (b,h,w,1))
-	#dimmax = 13
-	res   =  1.0*l1(pts_true*flags, pts*flags, (b, h, w, 4*2))
-	#/dimmax
-	return res
-	
+    flags = obj_probs_true.view(b, 1, h, w)
+    res = 1.0 * l1(pts_true * flags, pts * flags, (b, h, w, 4 * 2))
+    return res
+
+
 def iwpodnet_loss(Ytrue, Ypred):
-
-	wclas = 0.5
-	wloc = 0.5
-	return wloc*loc_loss(Ytrue, Ypred) + wclas*clas_loss(Ytrue, Ypred)
-	
-
+    wclas = 0.5
+    wloc = 0.5
+    return wloc * loc_loss(Ytrue, Ypred) + wclas * clas_loss(Ytrue, Ypred)

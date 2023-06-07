@@ -3,9 +3,9 @@ import numpy as np
 import random
 import glob
 
-from src.utils 	import im2single, getWH, hsv_transform
-from src.label	import Label
-from src.projection_utils import perspective_transform, find_T_matrix, getRectPts
+from .utils import im2single, getWH, hsv_transform
+from .label	import Label
+from .projection_utils import perspective_transform, find_T_matrix, getRectPts
 
 #
 #  Use UseBG if you want to pad distorted images with bakcground data
@@ -87,7 +87,7 @@ def insidePolygon(pt, lines):
 	return output
 
 
-def labels2output_map(labelist, lpptslist, dim, stride, alfa=0.75):
+def labels2output_map(labelist, lpptslist, dim, stride, alpha=0.75):
 	#
 	#  Generates outpmut map with binary (classification) labels and quadrilateral corners (regression)
 	#  label is the bounding box of the quadrilateral, and its locations are given in a list of plates
@@ -136,7 +136,7 @@ def labels2output_map(labelist, lpptslist, dim, stride, alfa=0.75):
 		#
 		#  Finds line equations of shrunk quadrilaterals 
 		#
-		pts2 = (ShrinkQuadrilateral(lppts, alfa).T * MN).T;
+		pts2 = (ShrinkQuadrilateral(lppts, alpha).T * MN).T;
 		lines = LinePolygonEdges(pts2);
 		
 		#
