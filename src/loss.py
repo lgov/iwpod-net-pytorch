@@ -45,11 +45,25 @@ def loc_loss(Ytrue, Ypred):
     affine_pred = Ypred[:, 1:, ...]
     pts_true = Ytrue[:, 1:, ...]
 
-    affinex = torch.stack([torch.clamp(affine_pred[:, 0, ...], min=0.), affine_pred[:, 1, ...], affine_pred[:, 2, ...]], 1)
-    affiney = torch.stack([affine_pred[:, 3, ...], torch.clamp(affine_pred[:, 4, ...], min=0.), affine_pred[:, 5, ...]], 1)
+    affinex = torch.stack(
+        [
+            torch.clamp(affine_pred[:, 0, ...], min=0.0),
+            affine_pred[:, 1, ...],
+            affine_pred[:, 2, ...],
+        ],
+        1,
+    )
+    affiney = torch.stack(
+        [
+            affine_pred[:, 3, ...],
+            torch.clamp(affine_pred[:, 4, ...], min=0.0),
+            affine_pred[:, 5, ...],
+        ],
+        1,
+    )
 
     v = 0.5
-    base = torch.tensor([-v, -v, 1., v, -v, 1., v, v, 1., -v, v, 1.])
+    base = torch.tensor([-v, -v, 1.0, v, -v, 1.0, v, v, 1.0, -v, v, 1.0])
     base = base.repeat(b, h, w, 1)
     # base = base.reshape(b, -1, h, w)
     base = base.permute(0, 3, 1, 2)
@@ -57,7 +71,7 @@ def loc_loss(Ytrue, Ypred):
     pts = torch.zeros((b, 0, h, w))
 
     for i in range(0, 12, 3):
-        row = base[:, i:(i + 3), ...]
+        row = base[:, i : (i + 3), ...]
         ptsx = torch.sum(affinex * row, 1)
         ptsy = torch.sum(affiney * row, 1)
 

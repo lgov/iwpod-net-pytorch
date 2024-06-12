@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+
 from .network import *
 
 
@@ -7,10 +7,10 @@ class EndBlockIWPODNet(nn.Module):
     def __init__(self, in_channels):
         super(EndBlockIWPODNet, self).__init__()
         self.prob_conv1 = ConvBatch(in_channels, 64, 3)
-        self.prob_conv2 = ConvBatch(64, 32, 3, activation='linear')
+        self.prob_conv2 = ConvBatch(64, 32, 3, activation="linear")
         self.prob_conv3 = nn.Conv2d(32, 1, 3, padding=1)
         self.bbox_conv1 = ConvBatch(in_channels, 64, 3)
-        self.bbox_conv2 = ConvBatch(64, 32, 3, activation='linear')
+        self.bbox_conv2 = ConvBatch(64, 32, 3, activation="linear")
         self.bbox_conv3 = nn.Conv2d(32, 6, 3, padding=1)
 
     def forward(self, x):
